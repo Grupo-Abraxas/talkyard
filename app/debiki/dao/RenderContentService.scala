@@ -57,7 +57,7 @@ class RenderContentActor(
 
 
   override def receive: Receive = {
-    // SECURITY DoS attack: Want to enqueue this case last-in-first-out, per page & params, so won't
+    // COULD SECURITY DoS attack: Want to enqueue this case last-in-first-out, per page & params, so won't
     // rerender the page more than once, even if is in the queue many times (with different hashes).
     // Can that be done with Akka actors in some simple way?
     case (sitePageId: SitePageId, customParamsAndHash: Option[PageRenderParamsAndHash]) =>
@@ -163,9 +163,6 @@ class RenderContentActor(
     val isOutOfDate = cachedAndCurrentVersions match {
       case None => true
       case Some((cachedHtmlVersion, currentPageVersion)) =>
-        // We don't have any hash of any up-to-date data for this page, so we cannot use
-        // cachedVersion.reactStoreJsonHash. Instead, compare site and page version numbers.
-        // (We might re-render a little bit too often.)
         cachedHtmlVersion.siteVersion != currentPageVersion.siteVersion ||
         cachedHtmlVersion.pageVersion != currentPageVersion.pageVersion ||
         cachedHtmlVersion.appVersion != globals.applicationVersion ||

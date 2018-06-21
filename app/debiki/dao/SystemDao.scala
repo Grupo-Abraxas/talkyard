@@ -424,6 +424,8 @@ class SystemDao(
     taskIdsBySite foreach { case (siteId, taskIds) =>
       val siteDao = globals.siteDao(siteId)
       taskIds foreach { taskId =>
+        // This might invalidate other subsequent review tasks — so need to check if
+        // the task has been invalidated. [2MFFKR0]
         siteDao.carryOutReviewDecision(taskId)
       }
     }

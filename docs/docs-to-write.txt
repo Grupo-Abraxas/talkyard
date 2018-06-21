@@ -1,0 +1,36 @@
+
+
+
+How use Talkyard as a blog: how to prevent users from creating new topics, only letting them comment on existing topics created by admins.
+(1 person asked)
+Ans: click the category, then security settings.
+
+Hmm maybe the edit category button = hidden, if categories disabled?
+Then one cannot edit security settings o.O
+
+
+
+Running Talkyard on a server together with other software.
+(1 person asked)
+Short answer: Add a reverse proxy.
+Long answer: https://www.talkyard.io/-71/self-hosted-installation-docker-containers-guidance
+Compare with:
+https://meta.discourse.org/t/running-other-websites-on-the-same-machine-as-discourse/17247
+https://www.digitalocean.com/community/tutorials/how-to-install-discourse-behind-nginx-on-ubuntu-14-04
+https://www.digitalocean.com/community/tutorials/how-to-set-up-nginx-with-http-2-support-on-ubuntu-16-04
+
+
+
+How export JSON & uploads from a Talkyard server, and import to another server?
+(1 person asked)
+Ans: Not yet implemented.
+Some work has been done: ImportExportController can import JSON and is used by the test suites.
+However, needs to be able to import more "detailed" things, & more types of objs, & also export.
+
+
+
+How import Disqus comments? How import WordPress comments?
+(1 + 1 person asked)
+Ans: Not yet possible. Planning to support.
+
+

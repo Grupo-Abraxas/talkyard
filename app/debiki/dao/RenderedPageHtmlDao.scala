@@ -57,7 +57,7 @@ trait RenderedPageHtmlDao {
 
   memCache.onPageSaved { sitePageId =>
     uncacheAndRerenderPage(sitePageId)
-    uncacheForums(sitePageId.siteId)
+    uncacheForums(sitePageId.siteId)   // [2F5HZM7]
   }
 
 
@@ -103,6 +103,10 @@ trait RenderedPageHtmlDao {
     // If rendering the page starting at certain reply (instead of the orig post),
     // don't use the mem cache (which post to use as the root isn't incl in the cache key). [5V7ZTL2]
     useMemCache &= pageRequest.pageRoot.contains(PageParts.BodyNr)
+
+    if (!useMemCache) {
+      // Add strict rate limits!
+    }
 
     val renderParams = PageRenderParams(
       widthLayout = if (pageRequest.isMobile) WidthLayout.Tiny else WidthLayout.Medium,

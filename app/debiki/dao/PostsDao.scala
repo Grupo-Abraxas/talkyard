@@ -1019,19 +1019,19 @@ trait PostsDao {
   def changePostStatus(postNr: PostNr, pageId: PageId, action: PostStatusAction, userId: UserId)
         : ChangePostStatusResult = {
     val result = readWriteTransaction(
-      changePostStatusImpl(postNr, pageId = pageId, action, userId = userId, _))
+      changePostStatusImpl(postNr, pageId = pageId, action, userId = userId, updateReviewTasks = true, _))
     refreshPageInMemCache(pageId)
     result
   }
 
 
   def changePostStatusImpl(postNr: PostNr, pageId: PageId, action: PostStatusAction,
-        userId: UserId, transaction: SiteTransaction): ChangePostStatusResult =  {
+        userId: UserId, updateReviewTasks: Boolean, tx: SiteTransaction): ChangePostStatusResult =  {
     import com.debiki.core.{PostStatusAction => PSA}
 
-    val page = PageDao(pageId, transaction)
-    val user = transaction.loadUser(userId) getOrElse throwForbidden("DwE3KFW2", "Bad user id")
-    throwIfMayNotSeePage(page, Some(user))(transaction)
+    val page = PageDao(pageId, tx)
+    val user = tx.loadUser(userId) getOrElse throwForbidden("DwE3KFW2", "Bad user id")
+    throwIfMayNotSeePage(page, Some(user))(tx)
 
     val postBefore = page.parts.thePostByNr(postNr)
 
@@ -1073,32 +1073,33 @@ trait PostsDao {
       }
     }
 
+    val now = globals.now().toJavaDate
+
     // Update the directly affected post.
     val postAfter = action match {
       case PSA.HidePost =>
-        postBefore.copyWithNewStatus(transaction.now.toJavaDate, userId, bodyHidden = true)
+        postBefore.copyWithNewStatus(now, userId, bodyHidden = true)
       case PSA.UnhidePost =>
-        postBefore.copyWithNewStatus(transaction.now.toJavaDate, userId, bodyUnhidden = true)
+        postBefore.copyWithNewStatus(now, userId, bodyUnhidden = true)
       case PSA.CloseTree =>
-        postBefore.copyWithNewStatus(transaction.now.toJavaDate, userId, treeClosed = true)
+        postBefore.copyWithNewStatus(now, userId, treeClosed = true)
       case PSA.CollapsePost =>
-        postBefore.copyWithNewStatus(transaction.now.toJavaDate, userId, postCollapsed = true)
+        postBefore.copyWithNewStatus(now, userId, postCollapsed = true)
       case PSA.CollapseTree =>
-        postBefore.copyWithNewStatus(transaction.now.toJavaDate, userId, treeCollapsed = true)
+        postBefore.copyWithNewStatus(now, userId, treeCollapsed = true)
       case PSA.DeletePost(clearFlags) =>
-        postBefore.copyWithNewStatus(transaction.now.toJavaDate, userId, postDeleted = true)
+        postBefore.copyWithNewStatus(now, userId, postDeleted = true)
       case PSA.DeleteTree =>
-        postBefore.copyWithNewStatus(transaction.now.toJavaDate, userId, treeDeleted = true)
+        postBefore.copyWithNewStatus(now, userId, treeDeleted = true)
     }
 
     updateNumVisible(postBefore, postAfter = postAfter)
-    SHOULD // delete any review tasks.
 
     val postsDeletedIds = ArrayBuffer[PostId]()
 
-    transaction.updatePost(postAfter)
+    tx.updatePost(postAfter)
     if (postBefore.isDeleted != postAfter.isDeleted) {
-      transaction.indexPostsSoon(postAfter)
+      tx.indexPostsSoon(postAfter)
       if (postAfter.isDeleted) {
         postsDeletedIds.append(postAfter.id)
       }
@@ -1111,20 +1112,20 @@ trait PostsDao {
         case PSA.CloseTree =>
           if (successor.closedStatus.areAncestorsClosed) None
           else Some(successor.copyWithNewStatus(
-            transaction.now.toJavaDate, userId, ancestorsClosed = true))
+            tx.now.toJavaDate, userId, ancestorsClosed = true))
         case PSA.CollapsePost =>
           None
         case PSA.CollapseTree =>
           if (successor.collapsedStatus.areAncestorsCollapsed) None
           else Some(successor.copyWithNewStatus(
-            transaction.now.toJavaDate, userId, ancestorsCollapsed = true))
+            tx.now.toJavaDate, userId, ancestorsCollapsed = true))
         case PSA.DeletePost(clearFlags) =>
           None
         case PSA.DeleteTree =>
           postsDeletedIds.append(successor.id)
           if (successor.deletedStatus.areAncestorsDeleted) None
           else Some(successor.copyWithNewStatus(
-            transaction.now.toJavaDate, userId, ancestorsDeleted = true))
+            tx.now.toJavaDate, userId, ancestorsDeleted = true))
         case x =>
           die("DwE8FMU3", "PostAction not implemented: " + x)
       }
@@ -1132,12 +1133,12 @@ trait PostsDao {
       var postsToReindex = Vector[Post]()
       anyUpdatedSuccessor foreach { updatedSuccessor =>
         updateNumVisible(postBefore = successor, postAfter = updatedSuccessor)
-        transaction.updatePost(updatedSuccessor)
+        tx.updatePost(updatedSuccessor)
         if (successor.isDeleted != updatedSuccessor.isDeleted) {
           postsToReindex :+= updatedSuccessor
         }
       }
-      transaction.indexPostsSoon(postsToReindex: _*)
+      tx.indexPostsSoon(postsToReindex: _*)
     }
 
     val oldMeta = page.meta
@@ -1148,12 +1149,27 @@ trait PostsDao {
     // If a question's answer got deleted, change question status to unsolved, and reopen it. [2JPKBW0]
     newMeta.answerPostUniqueId foreach { answerPostId =>
       if (postsDeletedIds contains answerPostId) {
+        answerGotDeleted = true
         // Dupl line. [4UKP58B]
         newMeta = newMeta.copy(answeredAt = None, answerPostUniqueId = None, closedAt = None)
         // Need change from the Solved icon: ✓  to a question mark: (?) icon, in the topic list:
         markSectionPageStale = true
-        answerGotDeleted = true
       }
+    }
+
+    // Invalidate, or re-activate, review tasks whose posts get deleted / undeleted.
+    // Also done here: [4JKAM7] when deleting pages.
+    if (!updateReviewTasks) {
+      // Currently carrying out a review task — the caller itself will update it.
+    }
+    else if (postsDeletedIds.nonEmpty) {
+      TESTS_MISSING
+      invalidateReviewTasksForPostIds(postsDeletedIds.toSet, tx)
+    }
+    else if (postBefore.isDeleted && !postAfter.isDeleted) {
+      TESTS_MISSING
+      // It got undeleted. (Currently no way to undelete whole sub trees [5EFAWQ2].)
+      reactivateReviewTasksForPostIds(Set(postBefore.id), tx)
     }
 
     // COULD update database to fix this. (Previously, chat pages didn't count num-chat-messages.)
@@ -1170,14 +1186,14 @@ trait PostsDao {
           math.max(0, oldMeta.numOrigPostRepliesVisible +
               numOrigPostVisibleRepliesBack - numOrigPostVisibleRepliesGone))
       markSectionPageStale = true
-      updatePagePopularity(page.parts, transaction)
+      updatePagePopularity(page.parts, tx)
     }
 
-    transaction.updatePageMeta(newMeta, oldMeta = oldMeta, markSectionPageStale)
+    tx.updatePageMeta(newMeta, oldMeta = oldMeta, markSectionPageStale)
 
     // In the future: if is a forum topic, and we're restoring the OP, then bump the topic.
 
-    BUG // should sometimes remove forum topic list from mem cache?
+    BUG // should sometimes remove forum topic list from mem cache? — already done, right: [2F5HZM7]
 
     ChangePostStatusResult(answerGotDeleted = answerGotDeleted)
   }
@@ -1364,15 +1380,16 @@ trait PostsDao {
   def deletePost(pageId: PageId, postNr: PostNr, deletedById: UserId,
         browserIdData: BrowserIdData) {
     readWriteTransaction(deletePostImpl(
-      pageId, postNr = postNr, deletedById = deletedById, browserIdData, _))
+      pageId, postNr = postNr, deletedById = deletedById, updateReviewTasks = true, browserIdData, _))
   }
 
 
   def deletePostImpl(pageId: PageId, postNr: PostNr, deletedById: UserId,
-        browserIdData: BrowserIdData, transaction: SiteTransaction) {
+        updateReviewTasks: Boolean, browserIdData: BrowserIdData,  tx: SiteTransaction) {
     val result = changePostStatusImpl(pageId = pageId, postNr = postNr,
       action = PostStatusAction.DeletePost(clearFlags = false), userId = deletedById,
-      transaction = transaction)
+      updateReviewTasks = updateReviewTasks,
+      tx = tx)
     refreshPageInMemCache(pageId)
     result
   }

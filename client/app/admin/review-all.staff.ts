@@ -268,7 +268,7 @@ const ReviewTask = createComponent({
 
 
     let safeHtml: string;
-    if (0 && post.currRevNr === post.approvedRevNr) {
+    if (0 && post.currRevNr === post.approvedRevNr) {  // what? why 0, = disables approvedHtmlSanitized?
       safeHtml = post.approvedHtmlSanitized;
     }
     else {

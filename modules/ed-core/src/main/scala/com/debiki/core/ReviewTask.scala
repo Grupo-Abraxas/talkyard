@@ -89,9 +89,9 @@ case class ReviewTask(
   createdAtRevNr: Option[Int] = None,
   moreReasonsAt: Option[ju.Date] = None,
   decidedAt: Option[ju.Date] = None,
-  completedAt: Option[ju.Date] = None,
-  completedAtRevNr: Option[Int] = None,
-  completedById: Option[UserId] = None,
+  completedAt: Option[ju.Date] = None,   // RENAME to carriedOutAt (?)
+  completedAtRevNr: Option[Int] = None,  // RENAME to decidedAtRevNr
+  completedById: Option[UserId] = None,  // RENAME to decidedById
   invalidatedAt: Option[ju.Date] = None,
   decision: Option[ReviewDecision] = None,
   // COULD change to a Set[UserId] and include editors too, hmm. [6KW02QS]  Or just the author +

@@ -143,7 +143,7 @@ trait UserDao {
           // Noop.
       }
 
-      /*val auditLogEntry = AuditLogEntry(
+      SHOULD /* val auditLogEntry = AuditLogEntry(
         siteId = siteId,
         id = AuditLogEntry.UnassignedId,
         didWhat = AuditLogEntryType.   ... what? new AuditLogEntryType enums, or one single EditUser enum,
@@ -219,38 +219,6 @@ trait UserDao {
       case ex: QuickMessageException =>
         Bad(ex.message)
     }
-  }
-
-
-  CLEAN_UP // use editMember() instead
-  def approveUser(userId: UserId, approverId: UserId) {
-    approveRejectUndoUser(userId, approverId = approverId, isapproved = Some(true))
-  }
-
-
-  CLEAN_UP // use editMember() instead
-  def rejectUser(userId: UserId, approverId: UserId) {
-    approveRejectUndoUser(userId, approverId = approverId, isapproved = Some(false))
-  }
-
-
-  CLEAN_UP // use editMember() instead
-  def undoApproveOrRejectUser(userId: UserId, approverId: UserId) {
-    approveRejectUndoUser(userId, approverId = approverId, isapproved = None)
-  }
-
-
-  private def approveRejectUndoUser(userId: UserId, approverId: UserId,
-        isapproved: Option[Boolean]) {
-    readWriteTransaction { transaction =>
-      var user = transaction.loadTheMemberInclDetails(userId)
-      user = user.copy(
-        isApproved = isapproved,
-        approvedAt = Some(transaction.now.toJavaDate),
-        approvedById = Some(approverId))
-      transaction.updateMemberInclDetails(user)
-    }
-    removeUserFromMemCache(userId)
   }
 
 

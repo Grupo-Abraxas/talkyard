@@ -1,0 +1,25 @@
+Can admin view direct messages?
+Ans: Yes.
+If someone for example posts illegal content via direct messages, or spam or toxic messages,
+then admins need to be able to investigate.
+
+
+Rich text editor? Emojis?
+Ans: Yes, soon (maybe August 2018). I'm thinking about using ProseMirror. Emojis: will have to wait a bit more. Meanwhile, use `:-)` :- )
+
+How do I do a manual backup?
+For the SaaS hosted version: You'll be able to export your community in JSON, see below.
+For self hosted version, you can export JSON, and also do a full database backup:
+`cd /opt/talkyard ;  .... `
+
+How do I configure automatic backups?
+Backups happen daily, for the SaaS hosted version, and also if you install yourself and
+follow the instructions (a cron job runs the backup script daily).
+
+Can one export the community in JSON?
+Ans: Not yet. There'll be a button that forum owners can click, to export their community
+in a `.tar.gz` zip file (?), and therein, there'll be a JSON file with all topics, comments, and users.
+Plus all uploaded files, e.g. images.
+
+(Details: Probably one will be able to export a .tar.gz file, which includes a JSON file with all topics & comments & users etcetera, and all uploaded files (images etcetera). I've started a little bit: The end-to-end tests import JSON files to create test communities.)
+

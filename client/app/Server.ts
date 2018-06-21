@@ -670,14 +670,6 @@ export function setIsAdminOrModerator(userId: UserId, doWhat: string, success: (
 }
 
 
-export function approveRejectUser(user: MemberInclDetails, doWhat: string, success: () => void) {
-  postJsonSuccess( '/-/approve-reject-user', success, {
-    userId: user.id,
-    doWhat: doWhat
-  });
-}
-
-
 export function suspendUser(userId: UserId, numDays: number, reason: string, success: () => void) {
   postJsonSuccess('/-/suspend-user', success, {
     userId: userId,

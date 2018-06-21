@@ -109,6 +109,7 @@ interface PostToReview {
   bodyHiddenAtMs?: number;
   bodyHiddenById?: UserId;
   bodyHiddenReason?: string;
+  deletedAtMs?: WhenMs;
 }
 
 

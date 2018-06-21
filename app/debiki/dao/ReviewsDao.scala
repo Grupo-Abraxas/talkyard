@@ -83,7 +83,7 @@ trait ReviewsDao {
         pageId = pageId,
         uniquePostId = task.postId,
         postNr = task.postNr)
-        // COULD add audit log fields: review decision & task id?
+        // COULD add audit log fields: review decision & task id? (4UWSQ1)
 
       tx.upsertReviewTask(taskWithDecision)
       tx.insertAuditLogEntry(auditLogEntry)
@@ -98,6 +98,9 @@ trait ReviewsDao {
 
       if (task.completedAt.isDefined)
         return false
+
+      // Don't: if (task-invalidated) return false — instead, undo anyway: maybe later some day,
+      // tasks can become active again. Then better have this task in an undone state.
 
       throwBadRequestIf(task.decidedAt.isEmpty,
         "TyE5GKQRT2", s"Review action not decided. Task id $reviewTaskId")
@@ -122,7 +125,7 @@ trait ReviewsDao {
         pageId = pageId,
         uniquePostId = task.postId,
         postNr = task.postNr)
-        // COULD add audit log fields: review decision & task id?
+        // COULD add audit log fields: review decision & task id? (4UWSQ1)
 
       tx.upsertReviewTask(taskUndone)
       tx.insertAuditLogEntry(auditLogEntry)
@@ -136,12 +139,20 @@ trait ReviewsDao {
 
     readWriteTransaction { tx =>
       val anyTask = tx.loadReviewTask(taskId)
-      val task = anyTask.getOrDie("EsE8YM42", s"Review task not found, site $siteId, task $taskId")
+      val task = anyTask.getOrDie("EsE8YM42", s"s$siteId: Review task $taskId not found")
       task.pageId.map(pageIdsToRefresh.add)
+
+      if (task.invalidatedAt.isDefined) {
+        // This should happen if many users flag a post, and one or different moderators click Delete,
+        // for each flag. Then many delete decisions get enqueued, for the same post
+        // — and when the first delete decision gets carried out, the other review tasks
+        // become invalidated (because now the post is gone). [2MFFKR0]
+        // That's fine, just do nothing.
+        return
+      }
 
       // Only one thread completes review tasks, so shouldn't be any races. [5YMBWQT]
       dieIf(task.completedAt.isDefined, "TyE2A2PUM6", "Review task already completed")
-      dieIf(task.invalidatedAt.isDefined, "TyE5J2PUM7", "Review task invalidated")
       val decision = task.decision getOrDie "TyE4ZK5QL"
       val completedById = task.completedById getOrDie "TyE2A2PUM01"
       dieIf(task.completedAtRevNr.isEmpty, "TyE2A2PUM02")
@@ -173,15 +184,14 @@ trait ReviewsDao {
                 // SPAM RACE COULD unhide only if rev nr that got hidden <=
                 // rev that was reviewed. [6GKC3U]
                 changePostStatusImpl(postNr = post.nr, pageId = post.pageId,
-                    PostStatusAction.UnhidePost, userId = completedById, tx)
+                    PostStatusAction.UnhidePost, userId = completedById, updateReviewTasks = false, tx)
               }
             }
             else {
               if (task.isForBothTitleAndBody) {
                 // This is for a new page. Approve the *title* here, and the *body* just below.
                 dieIf(!task.postNr.contains(PageParts.BodyNr), "EsE5TK0I2")
-                approvePostImpl(post.pageId, PageParts.TitleNr, approverId = completedById,
-                  tx)
+                approvePostImpl(post.pageId, PageParts.TitleNr, approverId = completedById, tx)
               }
               approvePostImpl(post.pageId, post.nr, approverId = completedById, tx)
               perhapsCascadeApproval(post.createdById, pageIdsToRefresh)(tx)
@@ -189,11 +199,12 @@ trait ReviewsDao {
           case ReviewDecision.DeletePostOrPage =>
             if (task.isForBothTitleAndBody) {
               val pageId = task.pageId getOrDie "TyE4K85R2"
-              deletePagesImpl(Seq(pageId), deleterId = completedById, browserIdData)(tx)
+              deletePagesImpl(Seq(pageId), deleterId = completedById,
+                  browserIdData, updateReviewTasks = false)(tx)   // bug?? need to upd tasks for *other* posts on same page
             }
             else {
               deletePostImpl(post.pageId, postNr = post.nr, deletedById = completedById,
-                browserIdData, tx)
+                  updateReviewTasks = false, browserIdData, tx)   // bug?? need to upd tasks for *other* posts on same page
             }
         }
       }
@@ -265,6 +276,43 @@ trait ReviewsDao {
         }
       }
     }
+  }
+
+
+  def invalidateReviewTasksForPostIds(postIds: Set[PostId], tx: SiteTransaction) {
+    TESTS_MISSING
+    setInvalidated(postIds, shallBeInvalidated = false, tx)
+  }
+
+
+  def reactivateReviewTasksForPostIds(postIds: Set[PostId], tx: SiteTransaction) {
+    TESTS_MISSING
+    setInvalidated(postIds, shallBeInvalidated = true, tx)
+  }
+
+
+  def invalidateReviewTasksForPageId(pageId: PageId, tx: SiteTransaction) {
+    TESTS_MISSING
+    val posts = tx.loadPostsOnPage(pageId) ; COULD_OPTIMIZE
+    setInvalidated(posts.map(_.id).toSet, shallBeInvalidated = true, tx)
+  }
+
+
+  def reactivateReviewTasksForPageId(pageId: PageId, tx: SiteTransaction) {
+    TESTS_MISSING
+    val posts = tx.loadPostsOnPage(pageId) ; COULD_OPTIMIZE // if the page is large, could be many posts
+    setInvalidated(posts.map(_.id).toSet, shallBeInvalidated = false, tx)
+  }
+
+
+  private def setInvalidated(postIds: Set[PostId], shallBeInvalidated: Boolean, tx: SiteTransaction) {
+    val now = globals.now().toJavaDate
+    val tasksLoaded = tx.loadReviewTasksAboutPostIds(postIds)
+    val tasksToUpdate = tasksLoaded.filter(_.invalidatedAt.isDefined != shallBeInvalidated)
+    val tasksAfter = tasksToUpdate.map { task =>
+      task.copy(invalidatedAt = if (shallBeInvalidated) Some(now) else None)
+    }
+    tasksAfter.foreach(tx.upsertReviewTask)
   }
 
 

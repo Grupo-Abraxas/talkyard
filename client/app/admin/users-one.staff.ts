@@ -106,7 +106,7 @@ export const UserProfileAdminView = createFactory({
     const user: MemberInclDetails = this.state.user;
     const me: Myself = store.me;
     if (!user)
-      return r.p({}, 'Loading...');
+      return r.p({}, "Loading...");
 
     const showPublProfileButton =
         ExtLinkButton({ href: this.publicProfileLink(), id: 'e2eA_Us_U_ShowPublProfB' },
@@ -178,6 +178,7 @@ export const UserProfileAdminView = createFactory({
           r.a({ className: 's_A_Us_U_Rows_Row_EmlManage', href: linkToUsersEmailAddrs(user.username) },
             "Manage ...")));
 
+    // UNTESTED
     const isApprovedRow = user.isGroup || !settings.userMustBeApproved ? null : makeRow(
         "Approved: ",
         user.isApproved,
@@ -188,9 +189,9 @@ export const UserProfileAdminView = createFactory({
 
 
     const suspendedText = user.suspendedTillEpoch
-        ? 'from ' + moment(user.suspendedAtEpoch).format('YYYY-MM-DD') +
-            ' to ' + moment(user.suspendedTillEpoch).format('YYYY-MM-DD HH:mm') +
-            ', reason: ' + user.suspendedReason
+        ? "from " + moment(user.suspendedAtEpoch).format('YYYY-MM-DD') +
+            " to " + moment(user.suspendedTillEpoch).format('YYYY-MM-DD HH:mm') +
+            ", reason: " + user.suspendedReason
         : "No";
 
     let whyCannotSuspend;
@@ -204,7 +205,7 @@ export const UserProfileAdminView = createFactory({
     let userSuspendedNow = user.suspendedTillEpoch && Date.now() <= user.suspendedTillEpoch;
     if (userSuspendedNow) {
       suspendButton =
-          Button({ onClick: this.unsuspendUser }, 'Unsuspend');
+          Button({ onClick: this.unsuspendUser }, "Unsuspend");
     }
     else if (whyCannotSuspend) {
       suspendButton = whyCannotSuspend;
@@ -298,7 +299,7 @@ const SuspendDialog = createComponent({
   doSuspend: function() {
     const numDays = parseInt(this.refs.daysInput.getValue());
     if (isNaN(numDays)) {
-      alert('Please enter a number');
+      alert("Please enter a number");
       return;
     }
     const reason = this.refs.reasonInput.getValue();
@@ -322,14 +323,14 @@ const SuspendDialog = createComponent({
         ModalHeader({},
           ModalTitle({}, "Suspend User")),
         ModalBody({},
-          Input({ type: 'number', label: 'Suspend for how many days?', ref: 'daysInput' }),
-          Input({ type: 'text', label: 'Why suspend this user?',
+          Input({ type: 'number', label: "Suspend for how many days?", ref: 'daysInput' }),
+          Input({ type: 'text', label: "Why suspend this user?",
               help: "This will be visible to everyone, " +
               "on the user's public profile, and shown to the user when s/he tries to login. " +
               "Keep it short.", ref: 'reasonInput' })),
         ModalFooter({},
-          Button({ onClick: this.doSuspend }, 'Suspend'),
-          Button({ onClick: this.close }, 'Cancel'))));
+          Button({ onClick: this.doSuspend }, "Suspend"),
+          Button({ onClick: this.close }, "Cancel"))));
   }
 });
 
